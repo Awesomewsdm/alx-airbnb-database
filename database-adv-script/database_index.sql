@@ -1,29 +1,32 @@
--- Indexes for User table
-CREATE INDEX idx_users_email ON Users(email);
-CREATE INDEX idx_users_created_at ON Users(created_at);
-CREATE INDEX idx_users_status ON Users(status);
+-- Create index on users table (commonly used in JOINs and WHERE clauses)
+CREATE INDEX idx_users_id ON users(id);
 
--- Indexes for Property table
-CREATE INDEX idx_property_host_id ON Property(host_id);
-CREATE INDEX idx_property_location ON Property(location);
-CREATE INDEX idx_property_price ON Property(price);
-CREATE INDEX idx_property_status ON Property(status);
-CREATE INDEX idx_property_created_at ON Property(created_at);
+-- Create index on bookings table (user_id and property_id are frequently used in JOINs)
+CREATE INDEX idx_bookings_user_id ON bookings(user_id);
+CREATE INDEX idx_bookings_property_id ON bookings(property_id);
 
--- Indexes for Booking table
-CREATE INDEX idx_booking_user_id ON Booking(user_id);
-CREATE INDEX idx_booking_property_id ON Booking(property_id);
-CREATE INDEX idx_booking_start_date ON Booking(start_date);
-CREATE INDEX idx_booking_end_date ON Booking(end_date);
-CREATE INDEX idx_booking_status ON Booking(status);
-CREATE INDEX idx_booking_created_at ON Booking(created_at);
+-- Create index on properties table (frequently joined with bookings and filtered by location)
+CREATE INDEX idx_properties_id ON properties(id);
+CREATE INDEX idx_properties_location ON properties(location);
 
--- Indexes for Payment table
-CREATE INDEX idx_payment_booking_id ON Payment(booking_id);
-CREATE INDEX idx_payment_status ON Payment(status);
-CREATE INDEX idx_payment_created_at ON Payment(created_at);
+-- Measure query performance BEFORE and AFTER indexing using EXPLAIN ANALYZE
 
--- Composite indexes for common query patterns
-CREATE INDEX idx_booking_dates_status ON Booking(start_date, end_date, status);
-CREATE INDEX idx_property_location_price ON Property(location, price);
-CREATE INDEX idx_users_email_status ON Users(email, status);
+-- Example: Check performance of joining users and bookings
+EXPLAIN ANALYZE
+SELECT u.id, u.name, b.id, b.start_date, b.end_date
+FROM users u
+JOIN bookings b
+    ON u.id = b.user_id;
+
+-- Example: Check performance of joining bookings and properties
+EXPLAIN ANALYZE
+SELECT b.id, b.start_date, b.end_date, p.name, p.location
+FROM bookings b
+JOIN properties p
+    ON b.property_id = p.id;
+
+-- Example: Check performance of filtering properties by location
+EXPLAIN ANALYZE
+SELECT id, name, location
+FROM properties
+WHERE location = 'New York';
