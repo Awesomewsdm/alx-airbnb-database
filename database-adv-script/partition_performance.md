@@ -1,89 +1,93 @@
+sql
+sql
+---
 # Partition Performance Report
 
 ## Goal
 Partition the `bookings` table by `start_date` to improve date-range query performance.
 
-## Steps performed
+## Steps Performed
+
 1. Implemented RANGE partitioning on `start_date` (see `partitioning.sql`).
-2. Created yearly partitions for 2022, 2023, 2024 and a default partition for others.
+2. Created yearly partitions for 2022, 2023, 2024, and a default partition for others.
 3. Migrated data into the partitioned table (if applicable).
 4. Created indexes on hot partitions (e.g., latest year).
 
-## How to test and measure
-1. Baseline:
-   ```sql
-   EXPLAIN ANALYZE SELECT COUNT(*) FROM bookings WHERE start_date BETWEEN '2024-01-01' AND '2024-01-31';
+## How to Test and Measure
+
+### Baseline
+
+```sql
+EXPLAIN ANALYZE SELECT COUNT(*) FROM bookings WHERE start_date BETWEEN '2024-01-01' AND '2024-01-31';
+```
+
 Capture baseline output.
 
-After partitioning (on bookings_part):
+### After Partitioning (on `bookings_part`)
 
-sql
-Copy code
+```sql
 EXPLAIN ANALYZE SELECT COUNT(*) FROM bookings_part WHERE start_date BETWEEN '2024-01-01' AND '2024-01-31';
-Compare:
+```
 
-Whether planner pruned partitions (look for “Partition Prune” or only scanning single partition).
+#### Compare:
+- Whether planner pruned partitions (look for "Partition Prune" or only scanning single partition)
+- Execution time reduction
+- I/O reduction
 
-Execution time reduction.
+## Expected Improvements
 
-I/O reduction.
+- Partition pruning should scan only the matching partition(s) instead of the whole table
+- Significant reduction in query time for date-bound queries
+- Better local index usage (indexes per partition)
 
-Expected improvements
-Partition pruning should scan only the matching partition(s) instead of the whole table.
+## Caveats
 
-Significant reduction in query time for date-bound queries.
+- No global indexes in some Postgres versions — need to create indexes per partition
+- Partitioning improves reads for partitioned key queries, but may not help queries that don’t filter by `start_date`
+- Added complexity for inserts (new partitions), constraints, maintenance
 
-Better local index usage (indexes per partition).
+## Suggestions
 
-Caveats
-No global indexes in some Postgres versions — need to create indexes per partition.
-
-Partitioning improves reads for partitioned key queries, but may not help queries that don’t filter by start_date.
-
-Added complexity for inserts (new partitions), constraints, maintenance.
-
-Suggestions
-Automate partition creation (cron job or scheduled task) for new date ranges.
-
-Monitor partitions for skew and re-balance if one partition becomes too large.
-
-sql
-Copy code
+- Automate partition creation (cron job or scheduled task) for new date ranges
+- Monitor partitions for skew and re-balance if one partition becomes too large
 
 ---
 
 # 7) `performance_monitoring.md`
-```markdown
-# Performance Monitoring & Refinement
 
-## Objective
+## Performance Monitoring & Refinement
+
+### Objective
 Continuously monitor frequently used queries, analyze execution plans, and refine schema or queries.
 
-## Tools / Commands
-- PostgreSQL:
-  - `EXPLAIN` — shows planner plan.
-  - `EXPLAIN ANALYZE` — runs the query and shows actual timings.
-  - `ANALYZE table_name;` — updates statistics.
-  - `VACUUM (VERBOSE, ANALYZE)` — maintain table health.
-  - `pg_stat_statements` extension — track slow queries over time.
-  - `SHOW work_mem;` and tune per-query memory settings for sorts/hashes.
+### Tools / Commands
 
-## Monitoring workflow
+- **PostgreSQL:**
+  - `EXPLAIN` — shows planner plan
+  - `EXPLAIN ANALYZE` — runs the query and shows actual timings
+  - `ANALYZE table_name;` — updates statistics
+  - `VACUUM (VERBOSE, ANALYZE)` — maintain table health
+  - `pg_stat_statements` extension — track slow queries over time
+  - `SHOW work_mem;` and tune per-query memory settings for sorts/hashes
+
+### Monitoring Workflow
+
 1. Identify heavy queries:
-   - Use `pg_stat_statements` to list top-by-total-time queries.
+   - Use `pg_stat_statements` to list top-by-total-time queries
 2. For each heavy query:
-   - Run `EXPLAIN ANALYZE` and paste the output.
-   - Look for Seq Scan, Hash Join vs Merge Join, Sort operations, and large memory spill messages.
+   - Run `EXPLAIN ANALYZE` and paste the output
+   - Look for Seq Scan, Hash Join vs Merge Join, Sort operations, and large memory spill messages
 3. Fix strategy:
-   - Add appropriate index or composite index.
-   - Re-write to reduce rows early (filter/join order or CTEs).
-   - Use materialized view for expensive aggregations.
-   - Consider partitioning for large tables (e.g., bookings).
+   - Add appropriate index or composite index
+   - Re-write to reduce rows early (filter/join order or CTEs)
+   - Use materialized view for expensive aggregations
+   - Consider partitioning for large tables (e.g., bookings)
 4. Post-change:
-   - Re-run `EXPLAIN ANALYZE` and compare.
-   - Record before/after metrics (execution time, buffers read).
+   - Re-run `EXPLAIN ANALYZE` and compare
+   - Record before/after metrics (execution time, buffers read)
 
-## Example commands
+### Example Commands
+
 ```sql
 -- Identify slow queries (requires pg_stat_statements)
 SELECT query, calls, total_time, mean_time
@@ -97,23 +101,20 @@ SELECT ...;
 
 -- Update stats after data change
 ANALYZE bookings;
-What to record in reports
-Query text
+```
 
-EXPLAIN ANALYZE before
+### What to Record in Reports
 
-Change made (index/partition/rewrite)
+- Query text
+- EXPLAIN ANALYZE before
+- Change made (index/partition/rewrite)
+- EXPLAIN ANALYZE after
+- Percent improvement in runtime
+- Any negative effects (write slowdown, disk usage)
 
-EXPLAIN ANALYZE after
+### Ongoing Maintenance
 
-Percent improvement in runtime
-
-Any negative effects (write slowdown, disk usage)
-
-Ongoing maintenance
-Schedule regular VACUUM / ANALYZE.
-
-Monitor growth of indexes and remove unused indexes.
-
-Keep stats up-to-date to help planner make better decisions.
+- Schedule regular VACUUM / ANALYZE
+- Monitor growth of indexes and remove unused indexes
+- Keep stats up-to-date to help planner make better decisions
 
